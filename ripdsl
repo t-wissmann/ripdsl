@@ -273,6 +273,7 @@ def encode_flac(source_path, target_path, tags):
     flac_cmd = [
         'flac',
         '--best',
+        '--verify',
         '--output-name=' + target_path,
         source_path,
     ]
