@@ -319,9 +319,9 @@ class TagsFileResult:
         if not 'Content-Type' in r.headers:
             fail('Content-Type header missing')
         if not r.headers['Content-Type'] in type2suffix:
-            fail("Unsupported file type '{}'. Supported filetypes: {}", \
+            fail("Unsupported file type '{}'. Supported filetypes: {}".format(
                 r.headers['Content-Type'],
-                ' '.join(type2suffix.keys()))
+                ' '.join(type2suffix.keys())))
         self.cover_response = r
         self.cover_suffix = type2suffix[r.headers['Content-Type']]
 
