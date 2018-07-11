@@ -286,6 +286,15 @@ def encode_flac(source_path, target_path, tags):
     debug('Creating {}'.format(target_path))
     subprocess.call(flac_cmd)
 
+def add_replay_gain(target_files):
+    flac_cmd = [
+        'metaflac',
+        '--add-replay-gain',
+    ]
+    flac_cmd += target_files
+    debug('Add replay gain to files {}'.format(' '.join(target_files)))
+    subprocess.call(flac_cmd)
+
 def tags_pathencoded(tags):
     """replace characters that are not allowed in filenames"""
     res = { }
@@ -369,6 +378,7 @@ class TagsFileResult:
 
     def apply(self):
         dir_paths = { }
+        target_files = [ ]
         for source, tags, target in self.files:
             target = os.path.join(self.root_expanded, target)
             target_dir = os.path.dirname(target)
@@ -376,6 +386,8 @@ class TagsFileResult:
             if not os.path.isdir(target_dir):
                 os.makedirs(os.path.normpath(target_dir))
             encode_flac(source, target, tags)
+            target_files.append(target)
+        add_replay_gain(target_files)
         dir_paths = list(dir_paths.keys())
         if len(dir_paths) == 0:
             print("No directory present to download the cover art to.")
