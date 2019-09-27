@@ -203,6 +203,8 @@ tags_template="""\
 #!/usr/bin/env python3
 # vim: ft=python
 
+import glob
+
 {TAGS_NOTES}
 tags = {{
 {GLOBAL_TAGS}  # 'DISC': 1,
@@ -417,8 +419,15 @@ def evaluate_tags_file(filepath) -> TagsFileResult:
         if not hasattr(function, 'res'):
             return None
         return function.res
+    # add all above functions into the scope of tags.py
+    variables = locals().copy()
 
-    exec(compile(open(filepath, "rb").read(), filepath, 'exec'))
+    with open(filepath, "rb") as fh:
+        tags_py_str = fh.read()
+
+    # I get strange effects if local and global dict are not the same!
+    exec(compile(tags_py_str, filepath, 'exec'), variables, variables)
+
     res = TagsFileResult()
     res.tags_py_path = filepath
     res.filepattern = get_result(filepath_format)
