@@ -271,32 +271,92 @@ def create_template(parameters, outfile=sys.stdout):
     tags_py_file = tags_template.format(**parameters)
     print(tags_py_file, file=outfile)
 
-def encode_flac(source_path, target_path, tags):
-    flac_cmd = [
-        'flac',
-        '--best',
-        '--verify',
-        '--delete-input-file',
-        '--output-name=' + target_path,
-        source_path,
-    ]
-    for k, v in tags.items():
-        flac_cmd.append('--tag={}={}'.format(k,v))
-    # debug(' '.join(flac_cmd))
-    if os.path.exists(target_path):
-        debug('skipping existing {}'.format(target_path))
-        return
-    debug('Creating {}'.format(target_path))
-    subprocess.call(flac_cmd)
+class Encoder:
+    def __init__(self):
+        pass
 
-def add_replay_gain(target_files):
-    flac_cmd = [
-        'metaflac',
-        '--add-replay-gain',
-    ]
-    flac_cmd += target_files
-    debug('Add replay gain to files {}'.format(' '.join(target_files)))
-    subprocess.call(flac_cmd)
+    def can_handle_filepath(self, filepath):
+        return False
+
+    def encode(self,source_path, target_path, tags):
+        pass
+
+    def finalize(self):
+        # do things like album replaygain
+        pass
+
+class FlacEncoder(Encoder):
+    def __init__(self):
+        self.target_paths = []
+
+    def can_handle_filepath(self, fp):
+        return bool(re.match('.*\.flac$', fp, re.IGNORECASE))
+
+    def encode(self, source_path, target_path, tags):
+        flac_cmd = [
+            'flac',
+            '--best',
+            '--verify',
+            # '--delete-input-file',
+            '--output-name=' + target_path,
+            source_path,
+        ]
+        for k, v in tags.items():
+            flac_cmd.append('--tag={}={}'.format(k,v))
+        self.target_paths.append(target_path)
+        # debug(' '.join(flac_cmd))
+        if os.path.exists(target_path):
+            debug('skipping existing {}'.format(target_path))
+            return
+        debug('Creating {}'.format(target_path))
+        subprocess.call(flac_cmd)
+
+    def finalize(self):
+        flac_cmd = [
+            'metaflac',
+            '--add-replay-gain',
+        ]
+        flac_cmd += self.target_paths
+        debug('Add replay gain to files {}'.format(' '.join(self.target_paths)))
+        subprocess.call(flac_cmd)
+
+class Mp3Encoder(Encoder):
+    def __init__(self):
+        self.target_paths = []
+
+    def can_handle_filepath(self, fp):
+        return bool(re.match('.*\.mp3$', fp, re.IGNORECASE))
+
+    def encode(self, source_path, target_path, tags):
+        lame_cmd = [
+            'lame',
+            '--abr', '192', # average bit rate
+            '--replaygain-accurate'
+        ]
+        tags2lameopt = [
+            ('TITLE', ['--tt', '']),
+            ('ARTIST', ['--ta', '']),
+            ('ALBUM', ['--tl', '']),
+            ('DATE', ['--ty', '']),
+            ('COMMENT', ['--tc', '']),
+            ('TRACKNUMBER', ['--tn', '']),
+            ('DISC', ['--tv', 'TPOS='])
+        ]
+        for tagname, lameopt in tags2lameopt:
+            if tagname in tags:
+                lame_cmd += lameopt[0:-1]
+                lame_cmd.append(lameopt[-1] + str(tags[tagname]))
+        lame_cmd += [
+            source_path,
+            target_path,
+        ]
+        # debug(' '.join(flac_cmd))
+        if os.path.exists(target_path):
+            debug('skipping existing {}'.format(target_path))
+            return
+        debug('Creating {}'.format(target_path))
+        print(' '.join(lame_cmd))
+        subprocess.call(lame_cmd)
 
 def tags_pathencoded(tags):
     """replace characters that are not allowed in filenames"""
@@ -382,15 +442,26 @@ class TagsFileResult:
     def apply(self):
         dir_paths = { }
         target_files = [ ]
+        available_encoders = [FlacEncoder(), Mp3Encoder()]
+        used_encoders = []
         for source, tags, target in self.files:
             target = os.path.join(self.root_expanded, target)
             target_dir = os.path.dirname(target)
             dir_paths[target_dir] = True
             if not os.path.isdir(target_dir):
                 os.makedirs(os.path.normpath(target_dir))
-            encode_flac(source, target, tags)
-            target_files.append(target)
-        add_replay_gain(target_files)
+            found = False
+            for idx, e in enumerate(used_encoders + available_encoders):
+                if e.can_handle_filepath(target):
+                    e.encode(source, target, tags)
+                    found = True
+                    if idx >= len(used_encoders):
+                        used_encoders.append(e)
+                    break
+            if not found:
+                print("Error: No encoder for target file \"{}\" found!".format(target))
+        for e in used_encoders:
+            e.finalize()
         dir_paths = list(dir_paths.keys())
         if len(dir_paths) == 0:
             print("No directory present to download the cover art to.")
