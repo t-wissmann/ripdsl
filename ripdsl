@@ -54,13 +54,30 @@ def get_cover_url_by_barcode(barcode):
     images_url = 'http://www.google.com/search?hl=en&q={}+amazon&btnI=745'.format(barcode)
     return images_url
 
+def discogs_get_track_artist(track):
+    if 'artists' not in track:
+        return ''
+    res = []
+    for a in track['artists']:
+        res.append(a['name'])
+        if a['join'] != '':
+            res.append(a['join'])
+    return ' '.join(res)
+
 def discogs_template_parameters(discogs_url):
     release_id = discogs_release_id_from_url(discogs_url)
     discogs_json = discogs_release_json(release_id)
     artists = [ a.get('name', '') for a in discogs_json.get('artists', []) ]
+    artists_str = ', '.join(artists)
+    # detect various artists
+    various_artists = False
+    if len(discogs_json['tracklist']) > 1:
+        # check whether there are multiple artists in the track metadata
+        track_artists = set([ discogs_get_track_artist(t) for t in discogs_json['tracklist']])
+        various_artists = len(track_artists) > 1
     tags = {
         'TRACKNUMBER' : 0,
-        'ARTIST' : ', '.join(artists),
+        ('ALBUMARTIST' if various_artists else 'ARTIST') : artists_str,
         'ALBUM' : discogs_json.get('title', ''),
         'DATE' : str(discogs_json.get('year', '')),
     }
@@ -70,14 +87,17 @@ def discogs_template_parameters(discogs_url):
         if t['type_'] == 'track' or t['type_'] == 'index':
             track_index += 1
             pos = t.get('position', str(track_index))
-            tracklist.append((pos, t['title']))
+            if various_artists:
+                tracklist.append((pos, t['title'], discogs_get_track_artist(t)))
+            else:
+                tracklist.append((pos, t['title']))
             for sub in t.get('sub_tracks', []):
                 comment = sub['position'] + ', ' + string_quoted(sub['title'])
                 tracklist.append(('#', comment))
         if t['type_'] == 'heading' and 'title' in t:
             tracklist.append(('#',string_quoted(t['title'])))
 
-    barcode = tags['ARTIST'] + '+' + tags['ALBUM']
+    barcode = artists_str + '+' + tags['ALBUM']
     for identifier in discogs_json.get('identifiers', []):
         id_type = identifier.get('type', '')
         if id_type == 'Barcode' and 'value' in identifier:
@@ -210,6 +230,10 @@ tags = {{
 {GLOBAL_TAGS}  # 'DISC': 1,
 }}
 
+# the list of all tracks. Every track is a tuple consisting of:
+#   - track number
+#   - track title
+#   - optional track artist (only if different than the album artist)
 tracklist = [
 {TRACKLIST}]
 
@@ -220,7 +244,7 @@ files = {FILELIST_COMMAND}
 # ]
 
 music_root('~/musik/')
-filepath_format('{{ARTIST}}/{{ALBUM}}/{{TRACKNUMBER:0>2}} {{TITLE}}.flac')
+filepath_format('{{ALBUMARTIST}}/{{ALBUM}}/{{TRACKNUMBER:0>2}} {{TITLE}}.flac')
 
 # optionally download cover art
 {COVER_URL_COMMAND}
@@ -232,25 +256,30 @@ copy_tags_py() # copy this tags.py file to the target directory
 #        if re.search('^CD2-', t[0]) ]
 
 for idx,f in enumerate(files):
-    tags['TRACKNUMBER'] = idx + 1
+    track_tags = dict(tags)
+    track_tags['TRACKNUMBER'] = idx + 1
     # disc, track = tracklist[idx][0].split('-')
-    # tags['TRACKNUMBER'] = track
-    # tags['DISC'] = disc
-    tags['TITLE'] = tracklist[idx][1]
-    encode(f, tags)
+    # track_tags['TRACKNUMBER'] = track
+    # track_tags['DISC'] = disc
+    track_tags['TITLE'] = tracklist[idx][1]
+    if len(tracklist[idx]) > 2:
+        track_tags['ARTIST'] = tracklist[idx][2]
+    encode(f, track_tags)
 
 """
 
 def create_template(parameters, outfile=sys.stdout):
     global tags_template
     tracklist_str = ""
-    for k,v in parameters['TRACKLIST']:
-        if k == '#':
-            tracklist_str += "  # {}\n".format(v)
+    for t in parameters['TRACKLIST']:
+        first = t[0]
+        if first == '#':
+            tracklist_str += "  # {}\n".format(', '.join(t[1:]))
         else:
+            rest = ', '.join([string_quoted(s) for s in t[1:]])
             tracklist_str += "  ({:<9}, {}),\n".format(\
-                string_quoted(k),
-                string_quoted(v))
+                string_quoted(first),
+                rest)
     global_tags = ""
     for k,v in parameters['GLOBAL_TAGS'].items():
         global_tags += " {:<18}: {},\n".format(\
@@ -544,7 +573,10 @@ def evaluate_tags_file(filepath) -> TagsFileResult:
     res.root = get_result(music_root)
     res.root_expanded = os.path.expanduser(res.root)
     for source, tags in get_result(encode):
-        target = res.filepattern.format(**tags_pathencoded(tags))
+        fileformat_tags = dict(tags_pathencoded(tags))
+        if 'ALBUMARTIST' not in fileformat_tags and 'ARTIST' in fileformat_tags:
+            fileformat_tags['ALBUMARTIST'] = fileformat_tags['ARTIST']
+        target = res.filepattern.format(**fileformat_tags)
         target = unidecode.unidecode(target)
         # replace whitespace around slashes
         target = re.sub(r' [ ]*/', '/', target)
