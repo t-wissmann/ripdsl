@@ -369,7 +369,7 @@ class OggEncoder(Encoder):
     def encode(self, source_path, target_path, tags):
         ogg_cmd = [
             'oggenc',
-            '-q', '5',
+            '-q', '6',
         ]
         for tagname, tagvalue in tags.items():
             ogg_cmd += ['-c', '{}={}'.format(tagname, tagvalue)]
