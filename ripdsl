@@ -358,6 +358,43 @@ class Mp3Encoder(Encoder):
         print(' '.join(lame_cmd))
         subprocess.call(lame_cmd)
 
+class OggEncoder(Encoder):
+    # requires oggenc (from vorbis-tools) and vorbisgain
+    def __init__(self):
+        self.target_paths = []
+
+    def can_handle_filepath(self, fp):
+        return bool(re.match('.*\.ogg$', fp, re.IGNORECASE))
+
+    def encode(self, source_path, target_path, tags):
+        ogg_cmd = [
+            'oggenc',
+            '-q', '5',
+        ]
+        for tagname, tagvalue in tags.items():
+            ogg_cmd += ['-c', '{}={}'.format(tagname, tagvalue)]
+        ogg_cmd += [
+            '-o', target_path,
+            source_path,
+        ]
+        # debug(' '.join(flac_cmd))
+        if os.path.exists(target_path):
+            debug('skipping existing {}'.format(target_path))
+            return
+        self.target_paths.append(target_path)
+        debug('Creating {}'.format(target_path))
+        print(' '.join(ogg_cmd))
+        subprocess.call(ogg_cmd)
+    def finalize(self):
+        ogg_cmd = [
+            'vorbisgain',
+            '--album',
+        ]
+        ogg_cmd += self.target_paths
+        debug('Add replay gain to files {}'.format(' '.join(self.target_paths)))
+        print(' '.join(ogg_cmd))
+        subprocess.call(ogg_cmd)
+
 def tags_pathencoded(tags):
     """replace characters that are not allowed in filenames"""
     res = { }
@@ -442,7 +479,7 @@ class TagsFileResult:
     def apply(self):
         dir_paths = { }
         target_files = [ ]
-        available_encoders = [FlacEncoder(), Mp3Encoder()]
+        available_encoders = [FlacEncoder(), Mp3Encoder(), OggEncoder()]
         used_encoders = []
         for source, tags, target in self.files:
             target = os.path.join(self.root_expanded, target)
