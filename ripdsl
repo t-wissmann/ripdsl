@@ -220,7 +220,7 @@ files = {FILELIST_COMMAND}
 # ]
 
 music_root('~/musik/')
-filepath_format('{{ARTIST}}/{{ALBUM}}/{{TRACKNUMBER:0>2}}. {{TITLE}}.flac')
+filepath_format('{{ARTIST}}/{{ALBUM}}/{{TRACKNUMBER:0>2}} {{TITLE}}.flac')
 
 # optionally download cover art
 {COVER_URL_COMMAND}
