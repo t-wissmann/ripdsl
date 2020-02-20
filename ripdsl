@@ -297,7 +297,7 @@ class FlacEncoder(Encoder):
             'flac',
             '--best',
             '--verify',
-            # '--delete-input-file',
+            '--delete-input-file',
             '--output-name=' + target_path,
             source_path,
         ]
