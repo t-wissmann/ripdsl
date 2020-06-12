@@ -379,10 +379,10 @@ class OggEncoder(Encoder):
             source_path,
         ]
         # debug(' '.join(flac_cmd))
+        self.target_paths.append(target_path)
         if os.path.exists(target_path):
             debug('skipping existing {}'.format(target_path))
             return
-        self.target_paths.append(target_path)
         debug('Creating {}'.format(target_path))
         print(' '.join(ogg_cmd))
         subprocess.call(ogg_cmd)
