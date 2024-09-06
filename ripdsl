@@ -398,6 +398,7 @@ class OggEncoder(Encoder):
     def encode(self, source_path, target_path, tags):
         ogg_cmd = [
             'oggenc',
+            '--discard-comments',  # do not copy over tags from input files in flac or ogg format
             # https://wiki.hydrogenaud.io/index.php?title=Recommended_Ogg_Vorbis#Recommended_Encoder_Settings
             '-q', '7',
         ]
@@ -415,6 +416,7 @@ class OggEncoder(Encoder):
         debug('Creating {}'.format(target_path))
         print(' '.join(ogg_cmd))
         subprocess.call(ogg_cmd)
+
     def finalize(self):
         ogg_cmd = [
             'vorbisgain',
