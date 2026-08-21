@@ -427,11 +427,25 @@ class OggEncoder(Encoder):
         print(' '.join(ogg_cmd))
         subprocess.call(ogg_cmd)
 
+
+def pathencode_tag_value(tag_value):
+    """Encode/Replace characters of a tag's value for using it in the file path"""
+    replacements = {
+        '/': '-',
+        '.': '',
+        '!': '',
+        '?': '',
+    }
+    tmp = unidecode.unidecode(tag_value)
+    for old, new in replacements.items():
+        tmp = tmp.replace(old, new)
+    return tmp
+
 def tags_pathencoded(tags):
     """replace characters that are not allowed in filenames"""
     res = { }
     for k,v in tags.items():
-        res[k] = str(v).replace("/", "-")
+        res[k] = pathencode_tag_value(str(v))
     return res
 
 class TagsFileResult:
@@ -579,7 +593,6 @@ def evaluate_tags_file(filepath) -> TagsFileResult:
         if 'ALBUMARTIST' not in fileformat_tags and 'ARTIST' in fileformat_tags:
             fileformat_tags['ALBUMARTIST'] = fileformat_tags['ARTIST']
         target = res.filepattern.format(**fileformat_tags)
-        target = unidecode.unidecode(target)
         # replace whitespace around slashes
         target = re.sub(r' [ ]*/', '/', target)
         target = re.sub(r'/ [ ]*', '/', target)
